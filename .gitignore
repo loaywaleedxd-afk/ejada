@@ -1,0 +1,42 @@
+# Maven / build output
+target/
+out/
+*.class
+
+# Logs
+*.log
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env overrides
+.env
+*.local
+
+# Images / diagrams (kept locally, not in the repo)
+*.jpg
+*.jpeg
+*.png
+*.gif
+
+# Generated documentation (kept locally, not in the repo)
+docs/
+*.docx
+
+# Claude Code local files (never committed)
+.claude/

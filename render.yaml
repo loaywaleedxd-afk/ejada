@@ -1,0 +1,101 @@
+services:
+  - type: web
+    name: auth-service
+    runtime: docker
+    rootDir: services/auth-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: APP_JWT_SECRET
+        sync: false
+      - key: INTERNAL_SECRET
+        sync: false
+      - key: WALLET_SERVICE_URL
+        sync: false
+
+  - type: web
+    name: wallet-service
+    runtime: docker
+    rootDir: services/wallet-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: APP_JWT_SECRET
+        sync: false
+      - key: INTERNAL_SECRET
+        sync: false
+
+  - type: web
+    name: inventory-service
+    runtime: docker
+    rootDir: services/inventory-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: INTERNAL_SECRET
+        sync: false
+
+  - type: web
+    name: shop-service
+    runtime: docker
+    rootDir: services/shop-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: APP_JWT_SECRET
+        sync: false
+      - key: INTERNAL_SECRET
+        sync: false
+      - key: WALLET_SERVICE_URL
+        sync: false
+      - key: INVENTORY_SERVICE_URL
+        sync: false
+
+  - type: web
+    name: api-gateway
+    runtime: docker
+    rootDir: services/api-gateway
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: APP_JWT_SECRET
+        sync: false
+      - key: INTERNAL_SECRET
+        sync: false
+      - key: AUTH_SERVICE_URL
+        sync: false
+      - key: WALLET_SERVICE_URL
+        sync: false
+      - key: SHOP_SERVICE_URL
+        sync: false
+      - key: INVENTORY_SERVICE_URL
+        sync: false
