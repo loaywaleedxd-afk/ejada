@@ -9,6 +9,8 @@ import com.ejada.shop.exception.ConflictException;
 import com.ejada.shop.exception.ResourceNotFoundException;
 import com.ejada.shop.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,11 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<Product> findAll() {
         return products.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Product> page(Pageable pageable) {
+        return products.findAll(pageable);
     }
 
     @Transactional(readOnly = true)

@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "a136c606-5472-412e-8f2c-d2f091496339",
+    "_postman_id": "f58a7552-4fa8-45c4-87e8-2fa06a724ee8",
     "name": "Ejada E-commerce (Gateway)",
-    "description": "End-to-end API for the Ejada e-commerce microservices, all through the API gateway.\n\nAUTH MODEL:\n- Public: register, login, refresh, GET products (shop & inventory), /actuator/health.\n- Authenticated (Bearer access token): wallet, cart, orders \u2014 ownership enforced (self or admin).\n- Admin only: create admin users, and create/update/delete products.\n\nUSAGE: run '1. Auth > Register (user)' (sets token & userId), and 'Login (admin)' (sets adminToken). Then create a product (sets productId/sku), add to cart, and checkout.\n\nAll services are reachable ONLY through the gateway; direct calls are blocked by a shared internal key.",
+    "description": "End-to-end API for the Ejada e-commerce microservices, all through the API gateway.\n\nAUTH MODEL:\n- Public: register, login, refresh, GET products (shop & inventory), /actuator/health.\n- Authenticated (Bearer access token): wallet, cart, orders \u2014 ownership enforced (self or admin).\n- Admin only: create admin users, and create/update/delete products.\n\nFEATURES: product pagination (?page&size&sort); admin-managed payment methods (shopper picks one at checkout via paymentMethodCode); admin discount codes (shopper applies via discountCode).\n\nRUN THE SUITES: folder '11. E2E Smoke Flow' = full happy path with assertions; folder '12. Logic Tests (errors)' = every error path with assertions. Run each folder top-to-bottom (folder Run / Collection Runner). On the free tier, wake services first (8. Health & Security > Gateway health).\n\nAll services are reachable ONLY through the gateway; direct calls are blocked by a shared internal key.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -53,6 +53,76 @@
     },
     {
       "key": "e2eUser",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2eCard",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2eDisc",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentMethodId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "discountId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "negToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "negUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "negProductId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "nUser",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "nSku",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "poorToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "poorUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "poorProductId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "poorUser",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "poorSku",
       "value": "",
       "type": "string"
     }
@@ -617,12 +687,12 @@
       "name": "3. Shop - Products",
       "item": [
         {
-          "name": "List products",
+          "name": "List products (paged)",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/shop/products",
+              "raw": "{{baseUrl}}/api/shop/products?page=0&size=10&sort=price,asc",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -630,14 +700,41 @@
                 "api",
                 "shop",
                 "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "sort",
+                  "value": "price,asc"
+                }
               ]
             },
             "auth": {
               "type": "noauth"
             },
-            "description": "Public catalog browse."
+            "description": "Public. Pagination via ?page & size & sort=field,dir. Returns { content, page, size, totalElements, totalPages, last }."
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + paged shape', function(){ pm.response.to.have.status(200); var d=pm.response.json();",
+                  "  pm.expect(d).to.have.property('content'); pm.expect(d).to.have.property('totalElements');",
+                  "  pm.expect(d.size).to.eql(10); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Get product",
@@ -999,7 +1096,12 @@
           "name": "Checkout",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/shop/orders/checkout/{{userId}}",
               "host": [
@@ -1013,6 +1115,15 @@
                 "{{userId}}"
               ]
             },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"WALLET\",\n  \"discountCode\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1023,7 +1134,7 @@
                 }
               ]
             },
-            "description": "Reserves stock in inventory, debits the wallet, confirms the reservation. 201 on success; 422 if stock/funds insufficient. Captures orderId."
+            "description": "Body: paymentMethodCode (default WALLET) + optional discountCode. Reserves stock, applies discount, debits the wallet (for wallet-backed methods), confirms. 201 on success; 422 if stock/funds/method/discount invalid. Captures orderId."
           },
           "response": [],
           "event": [
@@ -1589,7 +1700,268 @@
       "description": "Health check and security demonstrations."
     },
     {
-      "name": "9. E2E Smoke Flow",
+      "name": "9. Payment Methods",
+      "item": [
+        {
+          "name": "List payment methods (public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/payment-methods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "payment-methods"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public. The active methods a shopper can choose at checkout. WALLET is seeded (wallet-backed)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + array', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create payment method - CARD (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/payment-methods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "payment-methods"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"CARD\",\n  \"label\": \"Credit card\",\n  \"walletBacked\": false,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "ADMIN. walletBacked=false -> settled externally, no wallet debit. (409 if CARD already exists.)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('created 201', function(){ pm.response.to.have.status(201); });",
+                  "var d=pm.response.json(); pm.collectionVariables.set('paymentMethodId', d.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete payment method (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/payment-methods/{{paymentMethodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "payment-methods",
+                "{{paymentMethodId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "ADMIN."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin manages the payment-method catalog; shoppers pick one at checkout via paymentMethodCode."
+    },
+    {
+      "name": "10. Discounts",
+      "item": [
+        {
+          "name": "List discounts (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/discounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "discounts"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "ADMIN only (users never list codes; they just apply one at checkout)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + array', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create discount SAVE20 (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/discounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "discounts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAVE20\",\n  \"percentage\": 20,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "ADMIN. percentage 1-100. Shopper applies via discountCode at checkout. (409 if SAVE20 exists.)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('created 201', function(){ pm.response.to.have.status(201); pm.expect(pm.response.json().percentage).to.eql(20); });",
+                  "var d=pm.response.json(); pm.collectionVariables.set('discountId', d.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete discount (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/discounts/{{discountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "discounts",
+                "{{discountId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "ADMIN."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin generates percentage discount codes; shoppers apply one at checkout via discountCode."
+    },
+    {
+      "name": "11. E2E Smoke Flow",
       "item": [
         {
           "name": "1) Admin login",
@@ -1624,7 +1996,7 @@
             "auth": {
               "type": "noauth"
             },
-            "description": "Run this whole folder top-to-bottom (folder \u25b6 Run, or the Collection Runner). Each step asserts and feeds the next."
+            "description": "Run this whole folder top-to-bottom (folder \u25b6 Run). Covers payment-method choice + discount codes."
           },
           "response": [],
           "event": [
@@ -1633,8 +2005,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.collectionVariables.set('e2eSku','E2E-'+Date.now());",
-                  "pm.collectionVariables.set('e2eUser','e2e'+Date.now());"
+                  "var t=Date.now();",
+                  "pm.collectionVariables.set('e2eSku','E2E-'+t);",
+                  "pm.collectionVariables.set('e2eUser','e2e'+t);",
+                  "pm.collectionVariables.set('e2eCard','CARD'+t);",
+                  "pm.collectionVariables.set('e2eDisc','SAVE'+t);"
                 ]
               }
             },
@@ -1643,8 +2018,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "var d=pm.response.json();",
-                  "pm.collectionVariables.set('adminToken', d.accessToken);",
+                  "var d=pm.response.json(); pm.collectionVariables.set('adminToken', d.accessToken);",
                   "pm.test('admin login 200', function(){ pm.response.to.have.status(200); pm.expect(d.accessToken).to.be.a('string'); });"
                 ]
               }
@@ -1652,7 +2026,7 @@
           ]
         },
         {
-          "name": "2) Admin creates product (price 20, stock 30)",
+          "name": "2) Admin adds a CARD payment method",
           "request": {
             "method": "POST",
             "header": [
@@ -1662,19 +2036,19 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/shop/products",
+              "raw": "{{baseUrl}}/api/shop/payment-methods",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "shop",
-                "products"
+                "payment-methods"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"{{e2eSku}}\",\n  \"name\": \"E2E Widget\",\n  \"price\": 20,\n  \"initialStock\": 30\n}",
+              "raw": "{\n  \"code\": \"{{e2eCard}}\",\n  \"label\": \"Card\",\n  \"walletBacked\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1699,17 +2073,156 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('product created 201', function(){ pm.response.to.have.status(201); });",
-                  "var d=pm.response.json();",
-                  "pm.collectionVariables.set('productId', d.id);",
-                  "pm.collectionVariables.set('sku', d.sku);"
+                  "pm.test('method 201', function(){ pm.response.to.have.status(201); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "3) Shopper registers",
+          "name": "3) Admin generates a 20% discount code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/discounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "discounts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{e2eDisc}}\",\n  \"percentage\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('discount 201', function(){ pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4) Admin creates product (price 50, stock 30)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{e2eSku}}\",\n  \"name\": \"E2E Widget\",\n  \"price\": 50,\n  \"initialStock\": 30\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('product 201', function(){ pm.response.to.have.status(201); });",
+                  "var d=pm.response.json(); pm.collectionVariables.set('productId', d.id); pm.collectionVariables.set('sku', d.sku);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5) List payment methods includes WALLET",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/payment-methods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "payment-methods"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('has WALLET', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().map(function(m){return m.code;})).to.include('WALLET'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6) Shopper registers",
           "request": {
             "method": "POST",
             "header": [
@@ -1750,16 +2263,14 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('register 201', function(){ pm.response.to.have.status(201); });",
-                  "var d=pm.response.json();",
-                  "pm.collectionVariables.set('token', d.accessToken);",
-                  "pm.collectionVariables.set('userId', d.user.id);"
+                  "var d=pm.response.json(); pm.collectionVariables.set('token', d.accessToken); pm.collectionVariables.set('userId', d.user.id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "4) Deposit 100",
+          "name": "7) Deposit 100",
           "request": {
             "method": "POST",
             "header": [
@@ -1815,48 +2326,7 @@
           ]
         },
         {
-          "name": "5) Balance is 100",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/wallet/wallets/{{userId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "wallet",
-                "wallets",
-                "{{userId}}"
-              ]
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            }
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('balance == 100', function(){ pm.response.to.have.status(200); pm.expect(Number(pm.response.json().balance)).to.eql(100); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "6) Add product x2 to cart",
+          "name": "8) Add product x2 to cart (subtotal 100)",
           "request": {
             "method": "POST",
             "header": [
@@ -1905,17 +2375,22 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('added to cart 200', function(){ pm.response.to.have.status(200); });"
+                  "pm.test('cart 200', function(){ pm.response.to.have.status(200); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "7) Checkout",
+          "name": "9) Checkout with WALLET + 20% discount",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/shop/orders/checkout/{{userId}}",
               "host": [
@@ -1928,6 +2403,15 @@
                 "checkout",
                 "{{userId}}"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"WALLET\",\n  \"discountCode\": \"{{e2eDisc}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "auth": {
               "type": "bearer",
@@ -1947,15 +2431,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('checkout 201 + PAID', function(){ pm.response.to.have.status(201); var d=pm.response.json(); pm.expect(d.status).to.eql('PAID'); pm.expect(d.payment.status).to.eql('SUCCESS'); });",
-                  "pm.collectionVariables.set('orderId', pm.response.json().id);"
+                  "var d=pm.response.json();",
+                  "pm.test('PAID, total 80, 20% off, WALLET', function(){ pm.response.to.have.status(201); pm.expect(d.status).to.eql('PAID'); pm.expect(Number(d.totalAmount)).to.eql(80); pm.expect(d.discountPercent).to.eql(20); pm.expect(d.paymentMethod).to.eql('WALLET'); });",
+                  "pm.collectionVariables.set('orderId', d.id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "8) Balance debited to 60",
+          "name": "10) Balance debited by 80 -> 20",
           "request": {
             "method": "GET",
             "header": [],
@@ -1989,14 +2474,168 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('balance == 60 (100 - 2*20)', function(){ pm.response.to.have.status(200); pm.expect(Number(pm.response.json().balance)).to.eql(60); });"
+                  "pm.test('balance == 20', function(){ pm.response.to.have.status(200); pm.expect(Number(pm.response.json().balance)).to.eql(20); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "9) My orders (non-empty)",
+          "name": "11) Add product x1 to a new cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/carts/{{userId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "carts",
+                "{{userId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cart 200', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12) Checkout with CARD (external, no wallet debit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/checkout/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "checkout",
+                "{{userId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"{{e2eCard}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d=pm.response.json();",
+                  "pm.test('PAID via CARD, total 50', function(){ pm.response.to.have.status(201); pm.expect(d.status).to.eql('PAID'); pm.expect(Number(d.totalAmount)).to.eql(50); pm.expect(d.paymentMethod).to.eql(pm.collectionVariables.get('e2eCard')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13) Balance unchanged at 20 (card != wallet)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "{{userId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('balance still 20', function(){ pm.response.to.have.status(200); pm.expect(Number(pm.response.json().balance)).to.eql(20); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14) My orders (>= 2)",
           "request": {
             "method": "GET",
             "header": [],
@@ -2031,38 +2670,111 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('orders listed', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().length).to.be.above(0); });"
+                  "pm.test('two orders', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().length).to.be.at.least(2); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Full happy-path E2E: admin adds a payment method + a discount code + a product; shopper buys once with WALLET+discount (asserts 20% off and wallet debit) and once with CARD (asserts no wallet debit). Wake services first on the free tier."
+    },
+    {
+      "name": "12. Logic Tests (errors)",
+      "item": [
+        {
+          "name": "setup) Admin login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Run this folder top-to-bottom. It sets up its own users and asserts every error path."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var t=Date.now();",
+                  "pm.collectionVariables.set('nUser','neg'+t);",
+                  "pm.collectionVariables.set('nSku','NEG-'+t);",
+                  "pm.collectionVariables.set('poorUser','poor'+t);",
+                  "pm.collectionVariables.set('poorSku','POOR-'+t);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d=pm.response.json(); pm.collectionVariables.set('adminToken', d.accessToken); pm.test('admin login', function(){ pm.response.to.have.status(200); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "10) Ownership: other user's wallet -> 403",
+          "name": "E1) Register invalid body -> 400 + field errors",
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
-              "raw": "{{baseUrl}}/api/wallet/wallets/1",
+              "raw": "{{baseUrl}}/api/auth/register",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "wallet",
-                "wallets",
-                "1"
+                "auth",
+                "register"
               ]
             },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"a\",\n  \"email\": \"bad\",\n  \"password\": \"x\",\n  \"fullName\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
                 }
-              ]
+              }
+            },
+            "auth": {
+              "type": "noauth"
             }
           },
           "response": [],
@@ -2072,14 +2784,155 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('other wallet forbidden 403', function(){ pm.response.to.have.status(403); });"
+                  "pm.test('400 with fields', function(){ pm.response.to.have.status(400); pm.expect(pm.response.json().fields).to.be.an('object'); });"
                 ]
               }
             }
           ]
         },
         {
-          "name": "11) RBAC: non-admin create product -> 403",
+          "name": "setup) Register neg user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{nUser}}\",\n  \"email\": \"{{nUser}}@x.com\",\n  \"password\": \"secret123\",\n  \"fullName\": \"Neg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d=pm.response.json(); pm.collectionVariables.set('negToken', d.accessToken); pm.collectionVariables.set('negUserId', d.user.id); pm.test('registered', function(){ pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E2) Duplicate username -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{nUser}}\",\n  \"email\": \"dup{{nUser}}@x.com\",\n  \"password\": \"secret123\",\n  \"fullName\": \"Dup\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', function(){ pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E3) Login wrong password -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{nUser}}\",\n  \"password\": \"wrongpass9\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', function(){ pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E4) Non-admin creates product -> 403",
           "request": {
             "method": "POST",
             "header": [
@@ -2101,7 +2954,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"z{{e2eSku}}\",\n  \"name\": \"blocked\",\n  \"price\": 1\n}",
+              "raw": "{\n  \"sku\": \"x{{nSku}}\",\n  \"name\": \"no\",\n  \"price\": 1\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2113,7 +2966,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{token}}",
+                  "value": "{{negToken}}",
                   "type": "string"
                 }
               ]
@@ -2126,14 +2979,1112 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('non-admin create forbidden 403', function(){ pm.response.to.have.status(403); });"
+                  "pm.test('403 RBAC', function(){ pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E5) Non-admin creates discount -> 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/discounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "discounts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"HACK{{nSku}}\",\n  \"percentage\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 RBAC', function(){ pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E6) Discount percentage 150 -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/discounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "discounts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"BAD{{nSku}}\",\n  \"percentage\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 validation', function(){ pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E7) Discount percentage 0 -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/discounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "discounts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ZERO{{nSku}}\",\n  \"percentage\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 validation', function(){ pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E8) Access another user's wallet -> 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "1"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 ownership', function(){ pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E9) Deposit amount 0 -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/{{negUserId}}/deposit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "{{negUserId}}",
+                "deposit"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 validation', function(){ pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E10) Deposit with no token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/{{negUserId}}/deposit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "{{negUserId}}",
+                "deposit"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', function(){ pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E11) Checkout empty cart -> 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/checkout/{{negUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "checkout",
+                "{{negUserId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"WALLET\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 no active cart', function(){ pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E12) Get missing product -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products",
+                "999999999"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', function(){ pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E13) Get missing order -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "999999999"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', function(){ pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "setup) Admin creates NEG product (price 10, stock 1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{nSku}}\",\n  \"name\": \"Neg Widget\",\n  \"price\": 10,\n  \"initialStock\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d=pm.response.json(); pm.collectionVariables.set('negProductId', d.id); pm.test('created', function(){ pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "setup) Neg user deposits 100",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/{{negUserId}}/deposit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "{{negUserId}}",
+                "deposit"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('deposit 200', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "setup) Neg user adds NEG product x1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/carts/{{negUserId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "carts",
+                "{{negUserId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{negProductId}},\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cart 200', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E14) Checkout with unknown payment method -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/checkout/{{negUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "checkout",
+                "{{negUserId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"BITCOIN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 method unavailable', function(){ pm.response.to.have.status(422); pm.expect(pm.response.json().message).to.include('not available'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E15) Checkout with invalid discount -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/checkout/{{negUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "checkout",
+                "{{negUserId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"WALLET\",\n  \"discountCode\": \"NOPE999\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 invalid discount', function(){ pm.response.to.have.status(422); pm.expect(pm.response.json().message).to.include('discount'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "setup) Neg user adds 5 more (over stock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/carts/{{negUserId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "carts",
+                "{{negUserId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{negProductId}},\n  \"quantity\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cart 200', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E16) Checkout over-stock -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/checkout/{{negUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "checkout",
+                "{{negUserId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"WALLET\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{negToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 insufficient stock', function(){ pm.response.to.have.status(422); pm.expect(pm.response.json().message.toLowerCase()).to.include('stock'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "setup) Register poor user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{poorUser}}\",\n  \"email\": \"{{poorUser}}@x.com\",\n  \"password\": \"secret123\",\n  \"fullName\": \"Poor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d=pm.response.json(); pm.collectionVariables.set('poorToken', d.accessToken); pm.collectionVariables.set('poorUserId', d.user.id); pm.test('registered', function(){ pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "setup) Admin creates POOR product (price 100, stock 10)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{poorSku}}\",\n  \"name\": \"Poor Widget\",\n  \"price\": 100,\n  \"initialStock\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d=pm.response.json(); pm.collectionVariables.set('poorProductId', d.id); pm.test('created', function(){ pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "setup) Poor user deposits only 5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/{{poorUserId}}/deposit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "{{poorUserId}}",
+                "deposit"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{poorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('deposit 200', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "setup) Poor user adds POOR product x1 (needs 100)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/carts/{{poorUserId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "carts",
+                "{{poorUserId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{poorProductId}},\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{poorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cart 200', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E17) Checkout with insufficient funds -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/checkout/{{poorUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "checkout",
+                "{{poorUserId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"WALLET\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{poorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 payment failed', function(){ pm.response.to.have.status(422); pm.expect(pm.response.json().message.toLowerCase()).to.include('payment failed'); });"
                 ]
               }
             }
           ]
         }
       ],
-      "description": "Full end-to-end smoke: admin management + shopper purchase, top-to-bottom with assertions. Run the folder (\u25b6 Run) against the Render or Local environment. On the free tier, wake the services first (Health & Security \u2192 Gateway health returns 200) so nothing times out cold."
+      "description": "Negative / logic tests: every error path with assertions - validation (400), auth (401), RBAC + ownership (403), not-found (404), conflicts (409), and business rules (422): unknown payment method, invalid discount, out of stock, and insufficient funds. Run top-to-bottom; it creates its own users and data."
     }
   ]
 }

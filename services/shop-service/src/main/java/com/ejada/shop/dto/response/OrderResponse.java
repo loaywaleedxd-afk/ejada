@@ -1,7 +1,6 @@
 package com.ejada.shop.dto.response;
 
 import com.ejada.shop.domain.OrderStatus;
-import com.ejada.shop.domain.PaymentMethod;
 import com.ejada.shop.domain.PaymentStatus;
 
 import java.math.BigDecimal;
@@ -13,7 +12,11 @@ public record OrderResponse(
         String orderNumber,
         Long userId,
         OrderStatus status,
+        BigDecimal subtotal,
+        Integer discountPercent,
+        String discountCode,
         BigDecimal totalAmount,
+        String paymentMethod,
         LocalDateTime createdAt,
         List<Item> items,
         Payment payment
@@ -30,7 +33,7 @@ public record OrderResponse(
     public record Payment(
             Long id,
             BigDecimal amount,
-            PaymentMethod method,
+            String method,
             PaymentStatus status
     ) {
     }

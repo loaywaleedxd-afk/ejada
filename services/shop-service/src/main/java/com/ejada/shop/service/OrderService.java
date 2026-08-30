@@ -4,7 +4,6 @@ import com.ejada.shop.client.InventoryClient;
 import com.ejada.shop.client.WalletClient;
 import com.ejada.shop.domain.CartStatus;
 import com.ejada.shop.domain.OrderStatus;
-import com.ejada.shop.domain.PaymentMethod;
 import com.ejada.shop.domain.PaymentStatus;
 import com.ejada.shop.dto.request.*;
 import com.ejada.shop.dto.response.*;
@@ -17,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +34,8 @@ public class OrderService {
     private final OrderRepository orders;
     private final OrderItemRepository orderItems;
     private final PaymentRepository payments;
+    private final PaymentMethodRepository paymentMethods;
+    private final DiscountCodeRepository discounts;
     private final WalletClient walletClient;
     private final InventoryClient inventoryClient;
 
@@ -43,7 +45,7 @@ public class OrderService {
         }
     }
 
-    public OrderResponse checkout(Long userId) {
+    public OrderResponse checkout(Long userId, String paymentMethodCode, String discountCode) {
         Cart cart = carts.findByUserIdAndStatus(userId, CartStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("No active cart for user " + userId));
 
@@ -51,9 +53,29 @@ public class OrderService {
         if (lines.isEmpty()) {
             throw new BusinessRuleException("Cart is empty");
         }
-        BigDecimal total = lines.stream().map(Line::lineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Order order = persistOrder(userId, total, lines);
+        PaymentMethod method = paymentMethods.findByCodeIgnoreCaseAndActiveTrue(paymentMethodCode.trim())
+                .orElseThrow(() -> new BusinessRuleException(
+                        "Payment method '" + paymentMethodCode + "' is not available"));
+
+        BigDecimal subtotal = lines.stream().map(Line::lineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        int discountPercent = 0;
+        String appliedCode = null;
+        if (discountCode != null && !discountCode.isBlank()) {
+            DiscountCode dc = discounts.findByCodeIgnoreCaseAndActiveTrue(discountCode.trim())
+                    .orElseThrow(() -> new BusinessRuleException(
+                            "Invalid or inactive discount code: " + discountCode));
+            discountPercent = dc.getPercentage();
+            appliedCode = dc.getCode();
+        }
+
+        BigDecimal discountAmount = subtotal
+                .multiply(BigDecimal.valueOf(discountPercent))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal total = subtotal.subtract(discountAmount);
+
+        Order order = persistOrder(userId, subtotal, total, appliedCode, discountPercent, method.getCode(), lines);
         String orderRef = order.getOrderNumber();
 
         List<Line> reserved = new ArrayList<>();
@@ -67,18 +89,20 @@ public class OrderService {
             reserved.add(l);
         }
 
-        WalletTxnResponse debit = walletClient.debit(new DebitRequest(userId, total, orderRef, orderRef));
-        if (!WALLET_COMPLETED.equals(debit.status())) {
-            releaseAll(reserved, orderRef);
-            recordPayment(order, total, PaymentStatus.FAILED);
-            cancel(order);
-            throw new BusinessRuleException("Payment failed (insufficient funds or wallet unavailable)");
+        if (method.getWalletBacked()) {
+            WalletTxnResponse debit = walletClient.debit(new DebitRequest(userId, total, orderRef, orderRef));
+            if (!WALLET_COMPLETED.equals(debit.status())) {
+                releaseAll(reserved, orderRef);
+                recordPayment(order, total, PaymentStatus.FAILED, method.getCode());
+                cancel(order);
+                throw new BusinessRuleException("Payment failed (insufficient funds or wallet unavailable)");
+            }
         }
 
         for (Line l : reserved) {
             inventoryClient.confirm(new ReserveStockRequest(l.sku(), l.quantity(), orderRef));
         }
-        recordPayment(order, total, PaymentStatus.SUCCESS);
+        recordPayment(order, total, PaymentStatus.SUCCESS, method.getCode());
         order.setStatus(OrderStatus.PAID);
         orders.save(order);
 
@@ -110,11 +134,16 @@ public class OrderService {
         return lines;
     }
 
-    private Order persistOrder(Long userId, BigDecimal total, List<Line> lines) {
+    private Order persistOrder(Long userId, BigDecimal subtotal, BigDecimal total, String discountCode,
+                               int discountPercent, String paymentMethod, List<Line> lines) {
         Order order = orders.save(Order.builder()
                 .orderNumber(generateOrderNumber())
                 .userId(userId)
                 .status(OrderStatus.CREATED)
+                .subtotalAmount(subtotal)
+                .discountPercent(discountPercent)
+                .discountCode(discountCode)
+                .paymentMethod(paymentMethod)
                 .totalAmount(total)
                 .build());
         for (Line l : lines) {
@@ -140,11 +169,11 @@ public class OrderService {
         orders.save(order);
     }
 
-    private void recordPayment(Order order, BigDecimal amount, PaymentStatus status) {
+    private void recordPayment(Order order, BigDecimal amount, PaymentStatus status, String method) {
         payments.save(Payment.builder()
                 .orderId(order.getId())
                 .amount(amount)
-                .method(PaymentMethod.WALLET)
+                .method(method)
                 .status(status)
                 .build());
     }
@@ -163,6 +192,8 @@ public class OrderService {
                 .map(p -> new OrderResponse.Payment(p.getId(), p.getAmount(), p.getMethod(), p.getStatus()))
                 .orElse(null);
         return new OrderResponse(order.getId(), order.getOrderNumber(), order.getUserId(),
-                order.getStatus(), order.getTotalAmount(), order.getCreatedAt(), items, pay);
+                order.getStatus(), order.getSubtotalAmount(), order.getDiscountPercent(),
+                order.getDiscountCode(), order.getTotalAmount(), order.getPaymentMethod(),
+                order.getCreatedAt(), items, pay);
     }
 }

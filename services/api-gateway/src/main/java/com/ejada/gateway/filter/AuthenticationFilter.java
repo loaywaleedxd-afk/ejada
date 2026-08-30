@@ -94,20 +94,24 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             return true;
         }
         if (HttpMethod.GET.equals(method)
-                && (path.startsWith("/api/shop/products") || path.startsWith("/api/inventory/products"))) {
+                && (path.startsWith("/api/shop/products")
+                || path.startsWith("/api/inventory/products")
+                || path.startsWith("/api/shop/payment-methods"))) {
             return true;
         }
         return false;
     }
 
     private boolean isAdminRoute(String path, HttpMethod method) {
-        if (path.startsWith("/api/auth/admin/")) {
+        if (path.startsWith("/api/auth/admin/") || path.startsWith("/api/shop/discounts")) {
             return true;
         }
         boolean mutating = HttpMethod.POST.equals(method) || HttpMethod.PUT.equals(method)
                 || HttpMethod.DELETE.equals(method) || HttpMethod.PATCH.equals(method);
         return mutating
-                && (path.startsWith("/api/shop/products") || path.startsWith("/api/inventory/products"));
+                && (path.startsWith("/api/shop/products")
+                || path.startsWith("/api/inventory/products")
+                || path.startsWith("/api/shop/payment-methods"));
     }
 
     private Mono<Void> error(ServerWebExchange exchange, HttpStatus status, String message) {

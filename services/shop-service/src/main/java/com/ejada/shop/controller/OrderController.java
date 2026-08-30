@@ -1,5 +1,6 @@
 package com.ejada.shop.controller;
 
+import com.ejada.shop.dto.request.CheckoutRequest;
 import com.ejada.shop.dto.response.OrderResponse;
 import com.ejada.shop.entity.Order;
 import com.ejada.shop.security.AccessGuard;
@@ -21,9 +22,15 @@ public class OrderController {
     private final AccessGuard accessGuard;
 
     @PostMapping("/checkout/{userId}")
-    public ResponseEntity<OrderResponse> checkout(@PathVariable Long userId, HttpServletRequest request) {
+    public ResponseEntity<OrderResponse> checkout(@PathVariable Long userId,
+                                                  @RequestBody(required = false) CheckoutRequest req,
+                                                  HttpServletRequest request) {
         accessGuard.requireSelfOrAdmin(request, userId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(orderService.checkout(userId));
+        String method = (req == null || req.paymentMethodCode() == null || req.paymentMethodCode().isBlank())
+                ? "WALLET" : req.paymentMethodCode();
+        String discount = req == null ? null : req.discountCode();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(orderService.checkout(userId, method, discount));
     }
 
     @GetMapping("/user/{userId}")

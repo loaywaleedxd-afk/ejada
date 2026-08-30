@@ -1,6 +1,5 @@
 package com.ejada.shop.entity;
 
-import com.ejada.shop.domain.PaymentMethod;
 import com.ejada.shop.domain.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -29,10 +28,9 @@ public class Payment {
     @Column(precision = 12, scale = 2)
     private BigDecimal amount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(length = 30)
     @Builder.Default
-    private PaymentMethod method = PaymentMethod.WALLET;
+    private String method = "WALLET";
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

@@ -2,15 +2,16 @@ package com.ejada.shop.controller;
 
 import com.ejada.shop.dto.request.PatchProductRequest;
 import com.ejada.shop.dto.request.ProductRequest;
+import com.ejada.shop.dto.response.PagedResponse;
 import com.ejada.shop.dto.response.ProductResponse;
 import com.ejada.shop.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/shop/products")
@@ -20,8 +21,8 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
-    public List<ProductResponse> list() {
-        return productService.findAll().stream().map(ProductResponse::from).toList();
+    public PagedResponse<ProductResponse> list(@PageableDefault(size = 20) Pageable pageable) {
+        return PagedResponse.from(productService.page(pageable), ProductResponse::from);
     }
 
     @GetMapping("/{id}")

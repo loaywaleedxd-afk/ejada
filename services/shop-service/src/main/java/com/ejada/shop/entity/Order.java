@@ -33,6 +33,18 @@ public class Order {
     @Column(nullable = false, length = 25)
     private OrderStatus status;
 
+    @Column(name = "subtotal_amount", precision = 12, scale = 2)
+    private BigDecimal subtotalAmount;
+
+    @Column(name = "discount_percent")
+    private Integer discountPercent;
+
+    @Column(name = "discount_code", length = 40)
+    private String discountCode;
+
+    @Column(name = "payment_method", length = 30)
+    private String paymentMethod;
+
     @Column(name = "total_amount", precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
