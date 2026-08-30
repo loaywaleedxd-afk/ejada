@@ -90,7 +90,7 @@ public class OrderService {
         }
 
         if (method.getWalletBacked()) {
-            WalletTxnResponse debit = walletClient.debit(new DebitRequest(userId, total, orderRef, orderRef));
+            WalletTxnResponse debit = debitWithVerify(userId, total, orderRef);
             if (!WALLET_COMPLETED.equals(debit.status())) {
                 releaseAll(reserved, orderRef);
                 recordPayment(order, total, PaymentStatus.FAILED, method.getCode());
@@ -156,6 +156,16 @@ public class OrderService {
                     .build());
         }
         return order;
+    }
+
+    private WalletTxnResponse debitWithVerify(Long userId, BigDecimal total, String orderRef) {
+        WalletTxnResponse debit = walletClient.debit(new DebitRequest(userId, total, orderRef, orderRef));
+        int attempts = 0;
+        while (!WALLET_COMPLETED.equals(debit.status()) && attempts < 2) {
+            attempts++;
+            debit = walletClient.debit(new DebitRequest(userId, total, orderRef, orderRef));
+        }
+        return debit;
     }
 
     private void releaseAll(List<Line> reserved, String orderRef) {
