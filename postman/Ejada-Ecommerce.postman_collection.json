@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "f58a7552-4fa8-45c4-87e8-2fa06a724ee8",
+    "_postman_id": "837b5747-9f55-4517-aa2b-d090ebaa50f4",
     "name": "Ejada E-commerce (Gateway)",
     "description": "End-to-end API for the Ejada e-commerce microservices, all through the API gateway.\n\nAUTH MODEL:\n- Public: register, login, refresh, GET products (shop & inventory), /actuator/health.\n- Authenticated (Bearer access token): wallet, cart, orders \u2014 ownership enforced (self or admin).\n- Admin only: create admin users, and create/update/delete products.\n\nFEATURES: product pagination (?page&size&sort); admin-managed payment methods (shopper picks one at checkout via paymentMethodCode); admin discount codes (shopper applies via discountCode).\n\nRUN THE SUITES: folder '11. E2E Smoke Flow' = full happy path with assertions; folder '12. Logic Tests (errors)' = every error path with assertions. Run each folder top-to-bottom (folder Run / Collection Runner). On the free tier, wake services first (8. Health & Security > Gateway health).\n\nAll services are reachable ONLY through the gateway; direct calls are blocked by a shared internal key.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -123,6 +123,21 @@
     },
     {
       "key": "poorSku",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "uUser",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "uProductId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "uPrice",
       "value": "",
       "type": "string"
     }
@@ -4085,6 +4100,562 @@
         }
       ],
       "description": "Negative / logic tests: every error path with assertions - validation (400), auth (401), RBAC + ownership (403), not-found (404), conflicts (409), and business rules (422): unknown payment method, invalid discount, out of stock, and insufficient funds. Run top-to-bottom; it creates its own users and data."
+    },
+    {
+      "name": "13. User Journey (E2E)",
+      "item": [
+        {
+          "name": "1) Register shopper",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{uUser}}\",\n  \"email\": \"{{uUser}}@example.com\",\n  \"password\": \"secret123\",\n  \"fullName\": \"Shopper\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "A pure shopper journey (no admin steps). Run top-to-bottom. It picks a real product from the catalog, so at least one product must exist (run the admin E2E once, or seed a product)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('uUser','usr'+Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('register 201', function(){ pm.response.to.have.status(201); });",
+                  "var d=pm.response.json(); pm.collectionVariables.set('token', d.accessToken); pm.collectionVariables.set('userId', d.user.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2) Browse products (paged) and pick the first",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products?page=0&size=5&sort=price,asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "5"
+                },
+                {
+                  "key": "sort",
+                  "value": "price,asc"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('products listed', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().content.length).to.be.above(0); });",
+                  "var c=pm.response.json().content[0];",
+                  "if(c){ pm.collectionVariables.set('uProductId', c.id); pm.collectionVariables.set('uPrice', c.price); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3) See available payment methods",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/payment-methods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "payment-methods"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('has WALLET', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().map(function(m){return m.code;})).to.include('WALLET'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4) View the product",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products/{{uProductId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products",
+                "{{uProductId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5) Top up wallet with 500",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/{{userId}}/deposit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "{{userId}}",
+                "deposit"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('deposit 200', function(){ pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6) Balance is 500",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "{{userId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('balance == 500', function(){ pm.response.to.have.status(200); pm.expect(Number(pm.response.json().balance)).to.eql(500); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7) Add the product x1 to cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/carts/{{userId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "carts",
+                "{{userId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": {{uProductId}},\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cart total == price', function(){ pm.response.to.have.status(200); pm.expect(Number(pm.response.json().total)).to.eql(Number(pm.collectionVariables.get('uPrice'))); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8) View cart",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/carts/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "carts",
+                "{{userId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cart 200 + 1 item', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().items.length).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9) Checkout with WALLET",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/checkout/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "checkout",
+                "{{userId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethodCode\": \"WALLET\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d=pm.response.json();",
+                  "pm.test('PAID via WALLET, total == price', function(){ pm.response.to.have.status(201); pm.expect(d.status).to.eql('PAID'); pm.expect(d.paymentMethod).to.eql('WALLET'); pm.expect(Number(d.totalAmount)).to.eql(Number(pm.collectionVariables.get('uPrice'))); });",
+                  "pm.collectionVariables.set('orderId', d.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10) Balance debited to 500 - price",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallet/wallets/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "wallet",
+                "wallets",
+                "{{userId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('balance == 500 - price', function(){ pm.response.to.have.status(200); pm.expect(Number(pm.response.json().balance)).to.eql(500 - Number(pm.collectionVariables.get('uPrice'))); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11) Order detail is PAID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/{{orderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('order PAID', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('PAID'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12) My order history (>= 1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/orders/user/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "orders",
+                "user",
+                "{{userId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('has an order', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().length).to.be.at.least(1); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "User-only end-to-end: register, browse the paged catalog, pick a product, top up the wallet, add to cart, checkout with WALLET, and verify the order + the exact balance math - all from the shopper's side, using whatever product is first in the catalog."
     }
   ]
 }
