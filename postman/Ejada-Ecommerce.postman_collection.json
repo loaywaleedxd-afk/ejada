@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "dfd5d9b0-bcd1-4f88-96c3-d95436b04ce7",
+    "_postman_id": "ca280fb6-c9f6-4b29-93cd-ba97e6bf9498",
     "name": "Ejada E-commerce (Gateway)",
     "description": "End-to-end API for the Ejada e-commerce microservices, all through the API gateway.\n\nAUTH MODEL:\n- Public: register, login, refresh, GET products (shop & inventory), /actuator/health.\n- Authenticated (Bearer access token): wallet, cart, orders \u2014 ownership enforced (self or admin).\n- Admin only: create admin users, and create/update/delete products.\n\nFEATURES: product pagination (?page&size&sort); admin-managed payment methods (shopper picks one at checkout via paymentMethodCode); admin discount codes (shopper applies via discountCode).\n\nRUN THE SUITES: folder '11. E2E Smoke Flow' = full happy path with assertions; folder '12. Logic Tests (errors)' = every error path with assertions. Run each folder top-to-bottom (folder Run / Collection Runner). On the free tier, wake services first (8. Health & Security > Gateway health).\n\nAll services are reachable ONLY through the gateway; direct calls are blocked by a shared internal key.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -63,6 +63,11 @@
     },
     {
       "key": "e2eDisc",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "e2eCat",
       "value": "",
       "type": "string"
     },
@@ -2107,7 +2112,8 @@
                   "pm.collectionVariables.set('e2eSku','E2E-'+t);",
                   "pm.collectionVariables.set('e2eUser','e2e'+t);",
                   "pm.collectionVariables.set('e2eCard','CARD'+t);",
-                  "pm.collectionVariables.set('e2eDisc','SAVE'+t);"
+                  "pm.collectionVariables.set('e2eDisc','SAVE'+t);",
+                  "pm.collectionVariables.set('e2eCat','cat'+t);"
                 ]
               }
             },
@@ -2232,7 +2238,7 @@
           ]
         },
         {
-          "name": "4) Admin creates product (price 50, stock 30)",
+          "name": "4) Admin creates product (price 50, stock 30, category)",
           "request": {
             "method": "POST",
             "header": [
@@ -2254,7 +2260,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"{{e2eSku}}\",\n  \"name\": \"E2E Widget\",\n  \"price\": 50,\n  \"initialStock\": 30\n}",
+              "raw": "{\n  \"sku\": \"{{e2eSku}}\",\n  \"name\": \"E2E Widget\",\n  \"price\": 50,\n  \"category\": \"{{e2eCat}}\",\n  \"initialStock\": 30\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2281,6 +2287,80 @@
                 "exec": [
                   "pm.test('product 201', function(){ pm.response.to.have.status(201); });",
                   "var d=pm.response.json(); pm.collectionVariables.set('productId', d.id); pm.collectionVariables.set('sku', d.sku);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4b) Filter catalog by our category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products?category={{e2eCat}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "{{e2eCat}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var d=pm.response.json();",
+                  "pm.test('category filter returns only that category', function(){ pm.response.to.have.status(200); pm.expect(d.content.length).to.be.at.least(1); pm.expect(d.content.every(function(p){ return p.category && p.category.toLowerCase()===pm.collectionVariables.get('e2eCat').toLowerCase(); })).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4c) Categories list includes ours",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products",
+                "categories"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('categories includes our category', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json().map(function(c){ return (c||'').toLowerCase(); })).to.include(pm.collectionVariables.get('e2eCat').toLowerCase()); });"
                 ]
               }
             }
