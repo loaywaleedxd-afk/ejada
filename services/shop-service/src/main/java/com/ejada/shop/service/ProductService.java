@@ -29,8 +29,15 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public Page<Product> page(Pageable pageable) {
-        return products.findAll(pageable);
+    public Page<Product> page(String category, Pageable pageable) {
+        return (category == null || category.isBlank())
+                ? products.findAll(pageable)
+                : products.findByCategoryIgnoreCase(category.trim(), pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> categories() {
+        return products.findDistinctCategories();
     }
 
     @Transactional(readOnly = true)

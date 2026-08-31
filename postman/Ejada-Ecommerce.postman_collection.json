@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "837b5747-9f55-4517-aa2b-d090ebaa50f4",
+    "_postman_id": "dfd5d9b0-bcd1-4f88-96c3-d95436b04ce7",
     "name": "Ejada E-commerce (Gateway)",
     "description": "End-to-end API for the Ejada e-commerce microservices, all through the API gateway.\n\nAUTH MODEL:\n- Public: register, login, refresh, GET products (shop & inventory), /actuator/health.\n- Authenticated (Bearer access token): wallet, cart, orders \u2014 ownership enforced (self or admin).\n- Admin only: create admin users, and create/update/delete products.\n\nFEATURES: product pagination (?page&size&sort); admin-managed payment methods (shopper picks one at checkout via paymentMethodCode); admin discount codes (shopper applies via discountCode).\n\nRUN THE SUITES: folder '11. E2E Smoke Flow' = full happy path with assertions; folder '12. Logic Tests (errors)' = every error path with assertions. Run each folder top-to-bottom (folder Run / Collection Runner). On the free tier, wake services first (8. Health & Security > Gateway health).\n\nAll services are reachable ONLY through the gateway; direct calls are blocked by a shared internal key.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -746,6 +746,89 @@
                   "pm.test('200 + paged shape', function(){ pm.response.to.have.status(200); var d=pm.response.json();",
                   "  pm.expect(d).to.have.property('content'); pm.expect(d).to.have.property('totalElements');",
                   "  pm.expect(d.size).to.eql(10); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List by category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products?category=peripherals&page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "peripherals"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public. Filter the paged catalog by category (case-insensitive)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + paged', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json()).to.have.property('content'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/shop/products/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shop",
+                "products",
+                "categories"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public. Distinct categories in the catalog (for a filter dropdown)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + array', function(){ pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"
                 ]
               }
             }
